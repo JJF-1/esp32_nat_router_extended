@@ -36,6 +36,8 @@
 #include "esp_mac.h"
 #include <esp_netif.h>
 
+#include "timer.h" // 添加 timer.h 头文件
+
 #if !IP_NAPT
 #error "IP_NAPT must be defined"
 #endif
@@ -859,6 +861,8 @@ void app_main(void)
 
     // Setup WIFI
     wifi_init(ssid, passwd, static_ip, subnet_mask, gateway_addr, ap_ssid, ap_passwd, ap_ip, sta_user, sta_identity);
+
+    initializeAutoRestartTimer(); // 初始化每6小时重启的定时器
 
     pthread_t t1;
     int32_t led_disabled = 0;
