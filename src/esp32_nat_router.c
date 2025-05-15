@@ -37,6 +37,7 @@
 #include <esp_netif.h>
 
 #include "timer.h" // 添加 timer.h 头文件
+#include "esp_sntp.h" // 添加 SNTP 头文件
 
 #if !IP_NAPT
 #error "IP_NAPT must be defined"
@@ -476,7 +477,7 @@ static void wifi_event_handler(void *arg, esp_event_base_t event_base,
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STACONNECTED)
     {
-        ESP_LOGI(TAG, "Station connected");
+        ESP_LOGI(TAG, "Station connected, SNTP will start to sync");
     }
     else if (event_base == WIFI_EVENT && event_id == WIFI_EVENT_AP_STADISCONNECTED)
     {
@@ -769,6 +770,22 @@ static void setLogLevel(void)
     }
 }
 
+static void time_sync_notification_cb(struct timeval *tv)
+{
+    ESP_LOGI(TAG, "Time synchronized");
+}
+
+static void initialize_sntp(void)
+{
+    ESP_LOGI(TAG, "Initializing SNTP");
+    esp_sntp_setoperatingmode(ESP_SNTP_OPMODE_POLL);
+    esp_sntp_setservername(0, "time.windows.com");
+    sntp_set_time_sync_notification_cb(time_sync_notification_cb);
+    esp_sntp_init();
+    esp_sntp_set_sync_interval(10 * 60 * 1000); // 10 minutes in milliseconds
+}
+
+
 void app_main(void)
 {
     initialize_nvs();
@@ -862,7 +879,13 @@ void app_main(void)
     // Setup WIFI
     wifi_init(ssid, passwd, static_ip, subnet_mask, gateway_addr, ap_ssid, ap_passwd, ap_ip, sta_user, sta_identity);
 
+    // 设置时区为中国标准时间 (CST, UTC+8)
+    setenv("TZ", "CST-8", 1);  // 设置 TZ 环境变量
+    tzset();                   // 应用时区设置
+    ESP_LOGI(TAG, "Time zone set to China Standard Time (CST, UTC+8)");
+
     initializeAutoRestartTimer(); // 初始化每6小时重启的定时器
+    initialize_sntp(); // 初始化 SNTP 服务
 
     pthread_t t1;
     int32_t led_disabled = 0;
