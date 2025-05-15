@@ -27,6 +27,10 @@
 #include "soc/soc_caps.h"
 #include "esp_app_desc.h"
 
+#include "esp_timer.h"
+#include <time.h>
+#include <sys/time.h>
+
 #ifdef CONFIG_FREERTOS_USE_STATS_FORMATTING_FUNCTIONS
 #define WITH_TASKS_INFO 1
 #endif
@@ -40,6 +44,10 @@ static void register_version(void);
 static void register_restart(void);
 static void register_deep_sleep(void);
 static void register_light_sleep(void);
+
+static void register_uptime(void);
+static void register_time(void);
+
 #if WITH_TASKS_INFO
 static void register_tasks(void);
 #endif
@@ -52,6 +60,10 @@ void register_system(void)
     register_restart();
     register_deep_sleep();
     register_light_sleep();
+
+    register_uptime();
+    register_time();
+
 #if WITH_TASKS_INFO
     register_tasks();
 #endif
@@ -146,7 +158,7 @@ static void register_free(void)
     ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
 
-/* 'heap' command prints minumum heap size */
+/* 'heap' command prints minimum heap size */
 static int heap_size(int argc, char **argv)
 {
     uint32_t heap_size = heap_caps_get_minimum_free_size(MALLOC_CAP_DEFAULT);
@@ -163,6 +175,66 @@ static void register_heap(void)
         .func = &heap_size,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&heap_cmd));
+}
+
+/** 'uptime' command prints system uptime */
+static int uptime_func(int argc, char **argv)
+{
+    if (argc > 1) {
+        printf("Usage: uptime\n");
+        return 1;
+    }
+    int64_t uptime_us = esp_timer_get_time();
+    int64_t uptime_s = uptime_us / 1000000;
+    int days = uptime_s / 86400;
+    int hours = (uptime_s % 86400) / 3600;
+    int minutes = (uptime_s % 3600) / 60;
+    int seconds = uptime_s % 60;
+    printf("Uptime: %d days, %02d:%02d:%02d\n", days, hours, minutes, seconds);
+    return 0;
+}
+
+static void register_uptime(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "uptime",
+        .help = "Display system uptime",
+        .hint = NULL,
+        .func = &uptime_func,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}
+
+/** 'time' command prints current RTC time */
+static int time_func(int argc, char **argv)
+{
+    if (argc > 1) {
+        printf("Usage: time\n");
+        return 1;
+    }
+    struct timeval tv;
+    if (gettimeofday(&tv, NULL) != 0) {
+        printf("Failed to get time\n");
+        return 1;
+    }
+    struct tm timeinfo;
+    localtime_r(&tv.tv_sec, &timeinfo);
+    char time_str[64];
+    strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", &timeinfo);
+    int ms = tv.tv_usec / 1000;
+    printf("Current time: %s.%03d\n", time_str, ms);
+    return 0;
+}
+
+static void register_time(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "time",
+        .help = "Display current RTC time",
+        .hint = NULL,
+        .func = &time_func,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
 }
 
 /** 'tasks' command prints the list of tasks and related information */
